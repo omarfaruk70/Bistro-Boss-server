@@ -28,6 +28,7 @@ async function run() {
     const database = client.db("BistroBoss");
     const menus = database.collection("menus");
     const reviews = database.collection("reviews");
+    const cartCollection = database.collection("cartCollection");
 
 
     // get all data from database
@@ -41,6 +42,13 @@ async function run() {
     app.get('/reviews', async(req, res) => {
         const menucollection = await reviews.find().toArray();
         res.send(menucollection);
+    })
+
+    // post cart info 
+    app.post('/addToCard', async(req, res) => {
+      const cartInfo = req.body;
+      const result = await cartCollection.insertOne(cartInfo);
+      res.send(result);
     })
 
 

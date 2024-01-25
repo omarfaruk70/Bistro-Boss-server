@@ -1,8 +1,10 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
+const jwt = require('jsonwebtoken');
 const port = process.env.PORT || 5000;
 require("dotenv").config();
+
 
 app.use(express.json());
 app.use(cors());
@@ -30,6 +32,30 @@ async function run() {
     const reviews = database.collection("reviews");
     const cartCollection = database.collection("cartCollection");
 
+
+
+    // create a jsonwebtoken for api security
+    app.post('/jwt', async(req, res) => {
+      const user = req.body;
+      const jwtToken = jwt.sign(user, process.env.ACCESS_TOKEN, {expiresIn: '1d'});
+      res.send({AccessToken: jwtToken})
+    })
+
+    // MiddleWare for verifyJWT Token
+    const verifyjwtToken = (req, res, next) => {
+      if(!req.headers.authorization){
+        return res.status(401).send({message: "Unauthorized Access"})
+      }
+      const token = req.headers.authorization.split(' ')[1];
+      jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
+        if(err){
+          return res.status(401).send({message: "Unauthorized Access"})
+        }
+        req.decoded = decoded;
+        next();
+      })
+    }
+
     // get all data from database
     app.get("/menu", async (req, res) => {
       const menucollection = await menus.find().toArray();
@@ -51,10 +77,11 @@ async function run() {
     });
 
     // get all  users in the admin dashboard
-    app.get('/allusers', async(req, res) => {
+    app.get("/allusers", verifyjwtToken, async (req, res) => {
+      // console.log(req.headers);
       const allusers = await usersCollection.find().toArray();
-      res.send(allusers)  
-    })
+      res.send(allusers);
+    });
     // create a user and store in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -64,7 +91,7 @@ async function run() {
       const query = { email: user.email };
       const existingUser = await usersCollection.findOne(query);
       if (existingUser) {
-       return res.send({ message: "User already exist", insertedId: null });
+        return res.send({ message: "User already exist", insertedId: null });
       } else {
         const userInfo = await usersCollection.insertOne(user);
         res.send(userInfo);
@@ -78,24 +105,25 @@ async function run() {
     });
 
     // Make an admin api using patch method
-    app.patch('/allusers/makeAdmin/:id', async(req, res) => {
+    app.patch("/allusers/makeAdmin/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)}
+      const query = { _id: new ObjectId(id) };
       const updatedDoc = {
         $set: {
-          role: 'admin'
-        }
-      }
-    })
-
+          role: "admin",
+        },
+      };
+      const result = await usersCollection.updateOne(query, updatedDoc);
+      res.send(result);
+    });
 
     // delete user from dashboard action
-    app.delete('/allusers/:id', async(req, res) => {
+    app.delete("/allusers/:id", async (req, res) => {
       const id = req.params.id;
-      const query = {_id: new ObjectId(id)};
+      const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
       res.send(result);
-    }) 
+    });
     // delete a item from user dashboard (mycart route)
     app.delete("/deleteitemfromMycart/:id", async (req, res) => {
       const id = req.params.id;

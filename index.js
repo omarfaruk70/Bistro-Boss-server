@@ -50,6 +50,11 @@ async function run() {
       res.send(result);
     });
 
+    // get all  users in the admin dashboard
+    app.get('/allusers', async(req, res) => {
+      const allusers = await usersCollection.find().toArray();
+      res.send(allusers)  
+    })
     // create a user and store in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -72,10 +77,29 @@ async function run() {
       res.send(result);
     });
 
+    // Make an admin api using patch method
+    app.patch('/allusers/makeAdmin/:id', async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const updatedDoc = {
+        $set: {
+          role: 'admin'
+        }
+      }
+    })
+
+
+    // delete user from dashboard action
+    app.delete('/allusers/:id', async(req, res) => {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await usersCollection.deleteOne(query);
+      res.send(result);
+    }) 
     // delete a item from user dashboard (mycart route)
     app.delete("/deleteitemfromMycart/:id", async (req, res) => {
-      const item = req.params.id;
-      const query = { _id: new ObjectId(item) };
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
       const result = await cartCollection.deleteOne(query);
       res.send(result);
     });

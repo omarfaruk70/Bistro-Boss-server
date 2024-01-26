@@ -117,6 +117,22 @@ async function run() {
       res.send(result);
     });
 
+
+    // check user is Admin or not (using email and adding role);
+    app.get('/allusers/checkAdmin/:email', verifyjwtToken, async(req, res) => {
+      const email = req.params.email;
+      if(email !== req.decoded.email){
+        return res.status(403).send({message: "Forbidden"})
+      }
+      const query = {email: email};
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if(user){
+        admin = user?.role === 'admin'
+      }
+      res.send({admin});
+    })
+
     // delete user from dashboard action
     app.delete("/allusers/:id", async (req, res) => {
       const id = req.params.id;

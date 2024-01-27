@@ -1,10 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-const jwt = require('jsonwebtoken');
+const jwt = require("jsonwebtoken");
 const port = process.env.PORT || 5000;
 require("dotenv").config();
-
 
 app.use(express.json());
 app.use(cors());
@@ -23,7 +22,6 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
     const database = client.db("BistroBoss");
@@ -32,29 +30,76 @@ async function run() {
     const reviews = database.collection("reviews");
     const cartCollection = database.collection("cartCollection");
 
-
+    // ----- jwt and admin related apis ---------------
 
     // create a jsonwebtoken for api security
-    app.post('/jwt', async(req, res) => {
+    app.post("/jwt", async (req, res) => {
       const user = req.body;
-      const jwtToken = jwt.sign(user, process.env.ACCESS_TOKEN, {expiresIn: '1d'});
-      res.send({AccessToken: jwtToken})
-    })
+      const jwtToken = jwt.sign(user, process.env.ACCESS_TOKEN, {
+        expiresIn: "1d",
+      });
+      res.send({ AccessToken: jwtToken });
+    });
 
     // MiddleWare for verifyJWT Token
     const verifyjwtToken = (req, res, next) => {
-      if(!req.headers.authorization){
-        return res.status(401).send({message: "Unauthorized Access"})
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Unauthorized Access" });
       }
-      const token = req.headers.authorization.split(' ')[1];
+      const token = req.headers.authorization.split(" ")[1];
       jwt.verify(token, process.env.ACCESS_TOKEN, (err, decoded) => {
-        if(err){
-          return res.status(401).send({message: "Unauthorized Access"})
+        if (err) {
+          return res.status(401).send({ message: "Unauthorized Access" });
         }
         req.decoded = decoded;
         next();
-      })
-    }
+      });
+    };
+
+    // verify admin middleware. it intercepts some routes(like private routes). if user role is not admin it will not access those routes
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "Unauthorized Access" });
+      }
+      next();
+    };
+
+    // check user is Admin or not (using email and adding role);
+    app.get("/allusers/checkAdmin/:email", verifyjwtToken, async (req, res) => {
+      const email = req.params.email;
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      let admin = false;
+      if (user) {
+        admin = user?.role === "admin";
+      }
+      res.send({ admin });
+    });
+
+    // Make an admin api using patch method
+    app.patch(
+      "/allusers/makeAdmin/:id",
+      verifyjwtToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: "admin",
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
 
     // get all data from database
     app.get("/menu", async (req, res) => {
@@ -77,7 +122,7 @@ async function run() {
     });
 
     // get all  users in the admin dashboard
-    app.get("/allusers", verifyjwtToken, async (req, res) => {
+    app.get("/allusers", verifyjwtToken, verifyAdmin, async (req, res) => {
       // console.log(req.headers);
       const allusers = await usersCollection.find().toArray();
       res.send(allusers);
@@ -104,49 +149,29 @@ async function run() {
       res.send(result);
     });
 
-    // Make an admin api using patch method
-    app.patch("/allusers/makeAdmin/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await usersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
-
-
-    // check user is Admin or not (using email and adding role);
-    app.get('/allusers/checkAdmin/:email', verifyjwtToken, async(req, res) => {
-      const email = req.params.email;
-      if(email !== req.decoded.email){
-        return res.status(403).send({message: "Forbidden"})
-      }
-      const query = {email: email};
-      const user = await usersCollection.findOne(query);
-      let admin = false;
-      if(user){
-        admin = user?.role === 'admin'
-      }
-      res.send({admin});
-    })
-
     // delete user from dashboard action
-    app.delete("/allusers/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await usersCollection.deleteOne(query);
-      res.send(result);
-    });
+    app.delete(
+      "/allusers/:id",
+      verifyjwtToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await usersCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
     // delete a item from user dashboard (mycart route)
-    app.delete("/deleteitemfromMycart/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const result = await cartCollection.deleteOne(query);
-      res.send(result);
-    });
+    app.delete(
+      "/deleteitemfromMycart/:id",
+      verifyjwtToken,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await cartCollection.deleteOne(query);
+        res.send(result);
+      }
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });

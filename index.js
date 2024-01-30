@@ -22,7 +22,7 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const database = client.db("BistroBoss");
     const usersCollection = database.collection("users");
@@ -127,6 +127,13 @@ async function run() {
       const allusers = await usersCollection.find().toArray();
       res.send(allusers);
     });
+
+    // add item post for admin
+    app.post('/menu',verifyjwtToken, verifyAdmin, async(req, res) => {
+      const item = req.body;
+      const result = await menus.insertOne(item);
+      res.send(result);
+    })
     // create a user and store in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -172,12 +179,13 @@ async function run() {
         res.send(result);
       }
     );
-
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // Delete an item from collection (admin only)
+    app.delete('/menu/:id', verifyjwtToken, verifyAdmin, async(req, res) => {
+      const id = req.params.id ;
+      const query = {_id: new ObjectId(id)};
+      const result = await menus.deleteOne(query);
+      res.send(result);
+    })
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

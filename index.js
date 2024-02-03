@@ -2,8 +2,9 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 const jwt = require("jsonwebtoken");
-const port = process.env.PORT || 5000;
 require("dotenv").config();
+const port = process.env.PORT || 5000;
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 app.use(express.json());
 app.use(cors());
@@ -129,19 +130,18 @@ async function run() {
     });
 
     // get a specific item information for update item
-    app.get('/menu/:id', async(req, res) => {
-      const id = req.params.id ;
-      const query = {_id: new ObjectId(id)};
+    app.get("/menu/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
       const result = await menus.findOne(query);
       res.send(result);
-      console.log(result);
-    })
+    });
     // add item post for admin
-    app.post('/menu',verifyjwtToken, verifyAdmin, async(req, res) => {
+    app.post("/menu", verifyjwtToken, verifyAdmin, async (req, res) => {
       const item = req.body;
       const result = await menus.insertOne(item);
       res.send(result);
-    })
+    });
     // create a user and store in the database
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -161,6 +161,24 @@ async function run() {
     app.post("/addToCard", async (req, res) => {
       const cartInfo = req.body;
       const result = await cartCollection.insertOne(cartInfo);
+      res.send(result);
+    });
+
+    // update an item using patch(admin only)
+    app.patch("/menu/:id", verifyjwtToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const Item = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          name: Item.name,
+          recipe: Item.recipe,
+          image: Item.image,
+          category: Item.category,
+          price: Item.price,
+        },
+      };
+      const result = await menus.updateOne(filter, updatedDoc);
       res.send(result);
     });
 
@@ -188,12 +206,27 @@ async function run() {
       }
     );
     // Delete an item from collection (admin only)
-    app.delete('/menu/:id', verifyjwtToken, verifyAdmin, async(req, res) => {
-      const id = req.params.id ;
-      const query = {_id: new ObjectId(id)};
+    app.delete("/menu/:id", verifyjwtToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
       const result = await menus.deleteOne(query);
       res.send(result);
-    })
+    });
+
+    // stripe payment intent
+    app.post("/create-payment-intent",verifyjwtToken, async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card']
+      })
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      })
+    });
+    
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

@@ -30,6 +30,7 @@ async function run() {
     const menus = database.collection("menus");
     const reviews = database.collection("reviews");
     const cartCollection = database.collection("cartCollection");
+    const payments = database.collection("payments");
 
     // ----- jwt and admin related apis ---------------
 
@@ -212,21 +213,33 @@ async function run() {
       const result = await menus.deleteOne(query);
       res.send(result);
     });
-
+// =========================== Payment Related apis ================================
     // stripe payment intent
-    app.post("/create-payment-intent",verifyjwtToken, async (req, res) => {
+    app.post("/create-payment-intent", verifyjwtToken, async (req, res) => {
       const { price } = req.body;
       const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
-        currency: 'usd',
-        payment_method_types: ['card']
-      })
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
       res.send({
         clientSecret: paymentIntent.client_secret,
-      })
+      });
     });
-    
+
+    // post user card/product information for tracking / packing or delivery process
+    app.post('/payments', async(req, res)=> {
+      const payment = req.body;
+      const paymentHistory = await payments.insertOne(payment);
+      // if payment is successfull Delete the item from user cart 
+      const query = {_id: {
+        $in: payment.cartIds.map(id => new ObjectId(id))
+      }};
+      const deleteResult = await cartCollection.deleteMany(query)
+      res.send({paymentHistory, deleteResult});
+    })
+
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

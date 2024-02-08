@@ -238,6 +238,15 @@ async function run() {
       }};
       const deleteResult = await cartCollection.deleteMany(query)
       res.send({paymentHistory, deleteResult});
+    });
+    // Get specific payment history
+    app.get('/paymenthistory/:email', verifyjwtToken, async(req, res) => {
+      const query = {email: req.params.email};
+      if(req.params.email !== req.decoded.email){
+        return res.status(403).send({message: 'Forbidden Access'});
+      }
+      const result = await payments.find(query).toArray();
+      res.send(result);
     })
 
   } finally {

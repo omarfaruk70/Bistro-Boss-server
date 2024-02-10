@@ -213,7 +213,7 @@ async function run() {
       const result = await menus.deleteOne(query);
       res.send(result);
     });
-// =========================== Payment Related apis ================================
+    // =========================== Payment Related apis ================================
     // stripe payment intent
     app.post("/create-payment-intent", verifyjwtToken, async (req, res) => {
       const { price } = req.body;
@@ -229,26 +229,49 @@ async function run() {
     });
 
     // post user card/product information for tracking / packing or delivery process
-    app.post('/payments', async(req, res)=> {
+    app.post("/payments", async (req, res) => {
       const payment = req.body;
       const paymentHistory = await payments.insertOne(payment);
-      // if payment is successfull Delete the item from user cart 
-      const query = {_id: {
-        $in: payment.cartIds.map(id => new ObjectId(id))
-      }};
-      const deleteResult = await cartCollection.deleteMany(query)
-      res.send({paymentHistory, deleteResult});
+      // if payment is successfull Delete the item from user cart
+      const query = {
+        _id: {
+          $in: payment.cartIds.map((id) => new ObjectId(id)),
+        },
+      };
+      const deleteResult = await cartCollection.deleteMany(query);
+      res.send({ paymentHistory, deleteResult });
     });
     // Get specific payment history
-    app.get('/paymenthistory/:email', verifyjwtToken, async(req, res) => {
-      const query = {email: req.params.email};
-      if(req.params.email !== req.decoded.email){
-        return res.status(403).send({message: 'Forbidden Access'});
+    app.get("/paymenthistory/:email", verifyjwtToken, async (req, res) => {
+      const query = { email: req.params.email };
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "Forbidden Access" });
       }
       const result = await payments.find(query).toArray();
       res.send(result);
-    })
+    });
 
+    // ======== Analytics or charts ========
+    app.get("/admin-stats", verifyjwtToken, verifyAdmin, async (req, res) => {
+      const users = await usersCollection.estimatedDocumentCount();
+      const allMenus = await menus.estimatedDocumentCount();
+      const order = await payments.estimatedDocumentCount();
+
+      // calculate the revenue of the products(total sale) using mongodb aggregation. aggregation means somosti.
+      const result  = await payments.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalRevenue: {$sum: "$price"}
+          }
+        }
+      ]).toArray();
+      const totalRevenue = result.length > 0 ? result[0].totalRevenue : 0 ;
+
+      res.send(
+        {users, allMenus, order, totalRevenue}
+      )
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();

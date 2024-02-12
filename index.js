@@ -251,26 +251,85 @@ async function run() {
       res.send(result);
     });
 
-    // ======== Analytics or charts ========
+    // ======== Analytics and charts ========
     app.get("/admin-stats", verifyjwtToken, verifyAdmin, async (req, res) => {
       const users = await usersCollection.estimatedDocumentCount();
       const allMenus = await menus.estimatedDocumentCount();
       const order = await payments.estimatedDocumentCount();
 
       // calculate the revenue of the products(total sale) using mongodb aggregation. aggregation means somosti.
-      const result  = await payments.aggregate([
-        {
-          $group: {
-            _id: null,
-            totalRevenue: {$sum: "$price"}
-          }
-        }
-      ]).toArray();
-      const totalRevenue = result.length > 0 ? result[0].totalRevenue : 0 ;
+      const result = await payments
+        .aggregate([
+          {
+            $group: {
+              _id: null,
+              totalRevenue: { $sum: "$price" },
+            },
+          },
+        ])
+        .toArray();
+      const totalRevenue = result.length > 0 ? result[0].totalRevenue : 0;
+      res.send({ users, allMenus, order, totalRevenue });
+    });
 
-      res.send(
-        {users, allMenus, order, totalRevenue}
-      )
+    // charts / data visualizations using aggregate pipeline
+    // app.get("/order-stats", async (req, res) => {
+    //   const result = await payments.aggregate([
+    //       {
+    //         $unwind: "$menuItemIds",
+    //       },
+    //       {
+    //         $lookup: {
+    //           from: "menus",
+    //           localField: "cat",
+    //           foreignField: "category",
+    //           as: "menuItems",
+    //         },
+    //       },
+    //       {
+    //         $unwind: "$menuItems",
+    //       },
+    //       {
+    //         $group: {
+    //           _id: "$menuItems",
+    //           quantity: { $sum: 1 },
+    //           revenue: { $sum: "$menuItems" },
+    //         },
+    //       },
+    //     ])
+    //     .toArray();
+    //   res.send(result);
+    //   console.log(result);
+    // });
+    app.get("/order-stats", async (req, res) => {
+      const result = await payments
+        .aggregate([
+          {
+            $unwind: '$menuItemIds'
+          },
+          {
+            $lookup: {
+              from: "menus",
+              localField: "menuItemIds",
+              foreignField: "_id",
+              as: "menuItems",
+            },
+          },
+          {
+            $unwind: "$menuItems",
+          },
+          {
+            $group: {
+              _id: "$menuItems.category",
+              quantity: {$sum: 1},
+              revenue: {$sum: "$menuItems.price"}
+            }
+          }
+        ])
+        .toArray();
+
+      res.send(result);
+      console.log(result);
     });
   } finally {
     // Ensures that the client will close when you finish/error

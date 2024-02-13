@@ -302,15 +302,21 @@ async function run() {
     //   console.log(result);
     // });
     app.get("/order-stats", async (req, res) => {
-      const result = await payments
-        .aggregate([
+      const result = await payments.aggregate([
           {
             $unwind: '$menuItemIds'
           },
           {
+            $addFields: {
+              converted_object_id: {
+                $convert: { input: "$menuItemIds",  to: "objectId" }
+              }
+            }
+          },
+          {
             $lookup: {
               from: "menus",
-              localField: "menuItemIds",
+              localField: "converted_object_id",
               foreignField: "_id",
               as: "menuItems",
             },
@@ -323,6 +329,14 @@ async function run() {
               _id: "$menuItems.category",
               quantity: {$sum: 1},
               revenue: {$sum: "$menuItems.price"}
+            }
+          },
+          {
+            $project: {
+              _id: 0,
+              category: '$_id', // rename _id as category
+              quantity: '$quantity',
+              revenue: '$revenue'
             }
           }
         ])

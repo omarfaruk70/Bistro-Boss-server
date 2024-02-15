@@ -273,45 +273,18 @@ async function run() {
     });
 
     // charts / data visualizations using aggregate pipeline
-    // app.get("/order-stats", async (req, res) => {
-    //   const result = await payments.aggregate([
-    //       {
-    //         $unwind: "$menuItemIds",
-    //       },
-    //       {
-    //         $lookup: {
-    //           from: "menus",
-    //           localField: "cat",
-    //           foreignField: "category",
-    //           as: "menuItems",
-    //         },
-    //       },
-    //       {
-    //         $unwind: "$menuItems",
-    //       },
-    //       {
-    //         $group: {
-    //           _id: "$menuItems",
-    //           quantity: { $sum: 1 },
-    //           revenue: { $sum: "$menuItems" },
-    //         },
-    //       },
-    //     ])
-    //     .toArray();
-    //   res.send(result);
-    //   console.log(result);
-    // });
-    app.get("/order-stats", async (req, res) => {
-      const result = await payments.aggregate([
+    app.get("/order-stats", verifyjwtToken, verifyAdmin, async (req, res) => {
+      const result = await payments
+        .aggregate([
           {
-            $unwind: '$menuItemIds'
+            $unwind: "$menuItemIds",
           },
           {
             $addFields: {
               converted_object_id: {
-                $convert: { input: "$menuItemIds",  to: "objectId" }
-              }
-            }
+                $convert: { input: "$menuItemIds", to: "objectId" },
+              },
+            },
           },
           {
             $lookup: {
@@ -327,23 +300,23 @@ async function run() {
           {
             $group: {
               _id: "$menuItems.category",
-              quantity: {$sum: 1},
-              revenue: {$sum: "$menuItems.price"}
-            }
+              quantity: { $sum: 1 },
+              revenue: { $sum: "$menuItems.price" },
+            },
           },
           {
             $project: {
               _id: 0,
-              category: '$_id', // rename _id as category
-              quantity: '$quantity',
-              revenue: '$revenue'
-            }
-          }
+              category: "$_id", // rename _id as category
+              quantity: "$quantity",
+              revenue: "$revenue",
+            },
+          },
         ])
         .toArray();
 
       res.send(result);
-      console.log(result);
+      // console.log(result);
     });
   } finally {
     // Ensures that the client will close when you finish/error
